@@ -1,0 +1,16 @@
+.git
+.claude
+.gitignore
+
+# Local dev-only artifacts -- never needed inside the build context, and
+# accidentally copying a real data dir/FCM credentials could leak secrets
+# into an image layer. Credentials are always mounted at runtime (see
+# README), never baked into the image.
+/data
+*.json
+
+/bin
+/dist
+
+README.md
+docs
