@@ -95,8 +95,8 @@ All configuration is via environment variables (there is no config file):
 ## API
 
 - `GET /healthz` -- liveness check.
-- `GET /v1/capabilities` -- public, no auth: `{"fcm": true, "apns": false}`, reflecting what this instance is actually configured to send on.
-- `POST /v1/push/send` -- signed (see Security model above). Body: `{"platform": "fcm" | "apns", "token": "..."}`. `200 {"status":"sent"}` · `400` bad platform/body · `401` bad/missing/revoked signature or replayed nonce · `501` platform recognized but not configured on this instance · `502` the upstream FCM/APNs call itself failed.
+- `GET /v1/capabilities` -- public, no auth: `{"fcm": true, "apns": false}`, reflecting whether that platform's config vars are populated -- **not** whether a sender is actually wired up. Since APNs isn't implemented yet (see Status above), setting all the `GATEWAY_APNS_*` vars makes this report `"apns": true` even though `POST /v1/push/send` for `apns` will still fail (with `502`, not the `501` an unconfigured platform gets).
+- `POST /v1/push/send` -- signed (see Security model above). Body: `{"platform": "fcm" | "apns", "token": "..."}`. `200 {"status":"sent"}` · `400` bad platform/body · `401` bad/missing/revoked signature or replayed nonce · `501` platform recognized but not configured on this instance · `502` the upstream FCM/APNs call itself failed (currently always, for `apns`, since sending isn't implemented).
 
 ## Development
 
