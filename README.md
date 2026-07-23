@@ -105,3 +105,19 @@ go build ./...
 go vet ./...
 go test ./...
 ```
+
+## License
+
+Copyright (C) 2026 Andreas Behringer
+
+Freizone Gateway is free software: you can redistribute it and/or modify it
+under the terms of the **GNU Affero General Public License** as published by
+the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See the [`LICENSE`](LICENSE) file for the full text.
+
+The AGPL is used deliberately: because the gateway is offered over a network,
+anyone who runs a **modified** Freizone gateway as a service must make their
+modified source available to that service's users. Running an unmodified
+gateway, or self-hosting for yourself, carries no such obligation.
+
+`SPDX-License-Identifier: AGPL-3.0-or-later`
