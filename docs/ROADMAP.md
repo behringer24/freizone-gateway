@@ -17,7 +17,7 @@ Status values: `planned` · `in progress` · `done` · `deferred`.
 
 ## Planned
 
-### GW-01 — APNs push delivery for the iOS client
+### GAW-01 — APNs push delivery for the iOS client
 Status: planned · Depends on: APP-03 · Also affects: freizone-app
 The gateway relays FCM for Android today. Once the iOS client exists (APP-03),
 the APNs delivery path needs to be exercised and completed so iOS devices
