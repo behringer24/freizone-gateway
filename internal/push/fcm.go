@@ -47,6 +47,15 @@ func (s *fcmSender) Send(ctx context.Context, target Target) error {
 		Android: &messaging.AndroidConfig{Priority: "high"},
 	})
 	if err != nil {
+		// UNREGISTERED means the app was uninstalled or its data cleared;
+		// SENDER_ID_MISMATCH means the token belongs to a different Firebase
+		// project. Both are permanent for this token, so they're reported as
+		// ErrTokenInvalid to get the registration dropped rather than retried
+		// forever. Every other failure (quota, unavailable, internal, auth)
+		// is transient or on our side, and leaves the token alone.
+		if messaging.IsUnregistered(err) || messaging.IsSenderIDMismatch(err) {
+			return fmt.Errorf("%w: %v", ErrTokenInvalid, err)
+		}
 		return fmt.Errorf("push: fcm send failed: %w", err)
 	}
 	return nil

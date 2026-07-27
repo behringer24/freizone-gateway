@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -160,6 +161,25 @@ func TestHandleSendPushReturnsBadGatewayOnSendFailure(t *testing.T) {
 
 	if rec.Code != http.StatusBadGateway {
 		t.Errorf("status = %d, want 502", rec.Code)
+	}
+}
+
+// A permanently dead token must be reported as 410 Gone with a distinct
+// code, not folded into the generic 502 -- that difference is what lets
+// freizone-server tell "retry later" apart from "drop this registration".
+func TestHandleSendPushReturnsGoneOnInvalidToken(t *testing.T) {
+	sender := &fakeSender{err: fmt.Errorf("%w: registration-token-not-registered", push.ErrTokenInvalid)}
+	a := newTestAPI(t, map[string]push.Sender{push.PlatformFCM: sender}, map[string]bool{push.PlatformFCM: true})
+
+	req := newSignedPushRequest(t, `{"platform":"fcm","token":"dead-token"}`)
+	rec := httptest.NewRecorder()
+	a.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410, body = %s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "token_invalid") {
+		t.Errorf("body = %s, want it to carry the token_invalid code", body)
 	}
 }
 
