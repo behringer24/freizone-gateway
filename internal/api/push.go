@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -58,8 +59,22 @@ func (a *API) handleSendPush(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := sender.Send(ctx, push.Target{Platform: req.Platform, Token: req.Token}); err != nil {
+		caller, _ := auth.CallerFromContext(r.Context())
+
+		// A permanently dead token is a normal lifecycle event (app
+		// uninstalled, data cleared), not a gateway failure -- report it
+		// distinctly so the calling server can drop the registration
+		// instead of waking a device that no longer exists on every
+		// message. 410 Gone, since the target itself is what's gone.
+		if errors.Is(err, push.ErrTokenInvalid) {
+			if a.Logger != nil {
+				a.Logger.Info("push target no longer valid", "platform", req.Platform, "caller", caller)
+			}
+			writeError(w, http.StatusGone, "token_invalid", "this push token is no longer valid and should be discarded")
+			return
+		}
+
 		if a.Logger != nil {
-			caller, _ := auth.CallerFromContext(r.Context())
 			a.Logger.Warn("push send failed", "error", err, "platform", req.Platform, "caller", caller)
 		}
 		writeError(w, http.StatusBadGateway, "send_failed", "upstream push service call failed")
