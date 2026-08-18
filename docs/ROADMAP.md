@@ -9,6 +9,7 @@ Each item has a short **reference code**; the prefix names the owning repo:
 - `SRV-` — freizone-server (core)
 - `APP-` — freizone-app
 - `GAW-`  — freizone-gateway (this file)
+- `BOT-` — freizone-bot
 
 A change spanning several repos is listed **once**, in the repo where the
 essential work happens; its entry names the other repos it touches.
