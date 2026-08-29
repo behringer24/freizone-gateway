@@ -6,6 +6,36 @@ import (
 	"time"
 )
 
+// maxRequestBodyBytes caps every request body. The largest legitimate body
+// this gateway accepts is a push-send request -- a platform name and one
+// registration token, a few hundred bytes at most -- so this leaves well
+// over an order of magnitude of headroom while still bounding what an
+// unauthenticated caller can make the process allocate.
+//
+// Deliberately a constant rather than a config knob, which is where this
+// departs from freizone-server's equivalent: that server has blob uploads
+// whose ceiling an operator has a real reason to tune, whereas every body
+// this gateway accepts has a shape fixed by the protocol.
+const maxRequestBodyBytes = 8 << 10 // 8 KiB
+
+// withMaxBody caps every request body before any handler reads it -- and,
+// the point of it being here rather than in a handler, before
+// authentication reads it.
+//
+// auth.Middleware has to read the entire body to verify the signature
+// computed over it, which it necessarily does before it can know whether
+// the caller is anyone at all. Without this cap, that read is an
+// unauthenticated, unbounded allocation: one request with a large enough
+// body exhausts memory, so the capacity of the whole process is one
+// request. http.MaxBytesReader instead hands the reader an error once the
+// limit is passed, and the request fails as a bad one.
+func withMaxBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // withLogging logs method, path, status code, and duration for each request.
 func withLogging(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

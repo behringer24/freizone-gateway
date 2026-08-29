@@ -39,19 +39,59 @@ type Server struct {
 	servers []*http.Server
 }
 
+// Connection timeouts. freizone-server's equivalent block can only set two
+// of net/http's four, because a blob upload may legitimately take minutes
+// to read and an SSE stream stays open for hours. Neither exists here:
+// this gateway has three routes, the largest body it accepts is a few
+// hundred bytes (see maxRequestBodyBytes), and nothing streams. So all
+// four are safe, and leaving any of them at zero would only mean a hung
+// connection holds a goroutine and a file descriptor indefinitely.
+const (
+	// readHeaderTimeout is the Slowloris bound: a client that opens a
+	// connection and dribbles its headers holds nothing for longer than
+	// this.
+	readHeaderTimeout = 15 * time.Second
+
+	// readTimeout covers headers and body together.
+	readTimeout = 30 * time.Second
+
+	// writeTimeout covers the handler and the response write, so it must
+	// stay comfortably above internal/api's sendTimeout -- the bound on
+	// how long a push handler may legitimately block waiting on the
+	// upstream service. Set it below that and a healthy-but-slow FCM call
+	// would have its connection cut while the handler went on believing
+	// it had answered.
+	writeTimeout = 30 * time.Second
+
+	// idleTimeout closes a kept-alive connection with no request in
+	// flight. Comfortably above any client's own reuse interval, so it
+	// costs a reconnect only for connections genuinely finished with.
+	idleTimeout = 150 * time.Second
+)
+
+// withTimeouts applies the connection timeouts above -- see that block for
+// why this server can set all four.
+func withTimeouts(srv *http.Server) *http.Server {
+	srv.ReadHeaderTimeout = readHeaderTimeout
+	srv.ReadTimeout = readTimeout
+	srv.WriteTimeout = writeTimeout
+	srv.IdleTimeout = idleTimeout
+	return srv
+}
+
 // New builds a Server for opts. It does not start listening.
 func New(opts Options) (*Server, error) {
-	wrapped := withLogging(withRecover(opts.Handler, opts.Logger), opts.Logger)
+	wrapped := withLogging(withRecover(withMaxBody(opts.Handler), opts.Logger), opts.Logger)
 
 	switch opts.TLSMode {
 	case config.TLSModeOff:
 		return &Server{opts: opts, servers: []*http.Server{
-			{Addr: opts.HTTPAddr, Handler: wrapped},
+			withTimeouts(&http.Server{Addr: opts.HTTPAddr, Handler: wrapped}),
 		}}, nil
 
 	case config.TLSModeManual:
 		return &Server{opts: opts, servers: []*http.Server{
-			{Addr: opts.HTTPSAddr, Handler: wrapped},
+			withTimeouts(&http.Server{Addr: opts.HTTPSAddr, Handler: wrapped}),
 		}}, nil
 
 	case config.TLSModeAutocert:
@@ -63,15 +103,15 @@ func New(opts Options) (*Server, error) {
 			HostPolicy: autocert.HostWhitelist(opts.Domain),
 			Cache:      autocert.DirCache(opts.AutocertCacheDir),
 		}
-		httpsServer := &http.Server{
+		httpsServer := withTimeouts(&http.Server{
 			Addr:      opts.HTTPSAddr,
 			Handler:   wrapped,
 			TLSConfig: mgr.TLSConfig(),
-		}
-		httpServer := &http.Server{
+		})
+		httpServer := withTimeouts(&http.Server{
 			Addr:    opts.HTTPAddr,
 			Handler: mgr.HTTPHandler(nil), // serves ACME HTTP-01 challenges, redirects everything else to https
-		}
+		})
 		return &Server{opts: opts, servers: []*http.Server{httpServer, httpsServer}}, nil
 
 	default:
