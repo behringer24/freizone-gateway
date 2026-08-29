@@ -15,6 +15,10 @@ import (
 // take, so a slow upstream (FCM/APNs) can never pile up handler
 // goroutines -- the caller (freizone-server) already treats this as a
 // best-effort, fire-and-forget call on its side.
+//
+// Raising this means checking internal/server's writeTimeout, which has
+// to stay above it: it bounds the same handler from the connection side,
+// and would otherwise cut a send that is still legitimately running.
 const sendTimeout = 10 * time.Second
 
 // handleSendPush delivers one content-free wake to the given platform
